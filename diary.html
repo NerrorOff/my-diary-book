@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>情绪日记</title>
+    <!-- 预先加载 jQuery 和 turn.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/turn.js/3/turn.min.js"></script>
+    <style>
+        :root {
+            --bg: #f0edf7;
+            --card: #fdfbff;
+            --cover: #d9ceeb;
+            --btn: #7a5fa8;
+            --tab-active: #9b85c2;
+            --tab: #c7b9de;
+            --text: #3a2e4a;
+        }
+        body {
+            margin: 0;
+            background: var(--bg);
+            font-family: "Microsoft YaHei", "微软雅黑", "PingFang SC", "苹方", sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            color: var(--text);
+        }
+        .app-container {
+            width: 100%;
+            max-width: 400px;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: var(--tab);
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--text);
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            background: var(--tab-active);
+            color: white;
+        }
+        .panel {
+            display: none;
+        }
+        .panel.active {
+            display: block;
+        }
+        .emotion-row {
+            display: flex;
+            justify-content: space-around;
+            font-size: 36px;
+            margin: 25px 0;
+            cursor: pointer;
+            flex-wrap: wrap;
+        }
+        .emotion-row span {
+            padding: 8px;
+            border-radius: 50%;
+            transition: 0.2s;
+        }
+        .emotion-row span.selected {
+            background: #e9def7;
+            transform: scale(1.3);
+            box-shadow: 0 0 12px rgba(122,95,168,0.3);
+        }
+        textarea {
+            width: 100%;
+            height: 110px;
+            padding: 15px;
+            font-size: 16px;
+            border: 1px solid var(--tab);
+            border-radius: 12px;
+            background: var(--card);
+            resize: vertical;
+            box-sizing: border-box;
+            font-family: inherit;
+            color: var(--text);
+        }
+        .save-btn {
+            width: 100%;
+            margin-top: 15px;
+            padding: 15px;
+            background: var(--btn);
+            color: white;
+            font-size: 18px;
+            border: none;
+            border-radius: 40px;
+            cursor: pointer;
+            letter-spacing: 2px;
+        }
+        .backup-btn {
+            width: 100%;
+            margin-top: 8px;
+            padding: 12px;
+            background: #9b8ab3;
+            border: none;
+            border-radius: 20px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .feedback-toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #efe5ff;
+            color: #3a2e4a;
+            padding: 12px 24px;
+            border-radius: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            font-size: 15px;
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            max-width: 90%;
+            text-align: center;
+        }
+        .feedback-toast.show {
+            opacity: 1;
+        }
+        .book-cover {
+            text-align: center;
+            margin-bottom: 20px;
+            background: var(--cover);
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+        .book-cover h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .book-cover p {
+            margin: 10px 0 0;
+            color: #5e4e72;
+        }
+        /* 翻书区域 */
+        .book-area {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .flip-controls {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .turn-btn {
+            background: var(--btn);
+            border: none;
+            color: white;
+            font-size: 18px;
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.2s;
+            opacity: 0.9;
+        }
+        .turn-btn:hover {
+            opacity: 1;
+            background: #6a4e96;
+        }
+        .turn-btn:disabled {
+            opacity: 0.4;
+            cursor: default;
+            background: #b1a3c5;
+        }
+        #flipbook {
+            width: 100%;
+            height: 380px;
+            background: #f9f6ff;
+            border-radius: 4px 12px 12px 4px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+            touch-action: pan-y pinch-zoom; /* 保留垂直滑动，避免turn.js冲突 */
+        }
+        .diary-page {
+            padding: 25px 20px;
+            height: 100%;
+            box-sizing: border-box;
+            background: var(--card);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 16px;
+            line-height: 1.8;
+            position: relative;
+        }
+        .diary-page .emotion-big {
+            font-size: 60px;
+        }
+        .diary-page .date-text {
+            margin-top: 10px;
+            color: #8b7b9e;
+            font-size: 14px;
+        }
+        .diary-page .content-text {
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 0 10px;
+        }
+        /* 删除按钮 */
+        .delete-btn {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #b1a3c5;
+            transition: 0.2s;
+            z-index: 10;
+        }
+        .delete-btn:hover {
+            color: #e07a7a;
+            transform: scale(1.2);
+        }
+        .empty-book {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #b1a3c5;
+            font-size: 18px;
+        }
+        /* 回退模式（无turn.js时）的卡片切换样式 */
+        .card-view {
+            overflow: hidden;
+            position: relative;
+            height: 380px;
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+        }
+        .card-view .diary-page {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.4s ease;
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="tab-buttons">
+        <button class="tab-btn active" onclick="switchTab('write')">✍️</button>
+        <button class="tab-btn" onclick="switchTab('read')">📖</button>
+    </div>
+
+    <!-- 写日记面板 -->
+    <div id="writePanel" class="panel active">
+        <div style="text-align:center; color:#6d5f82; margin-bottom:10px;">现在的感受如何？</div>
+        <div class="emotion-row" id="emotionRow">
+            <span data-emotion="😊">😊</span>
+            <span data-emotion="😢">😢</span>
+            <span data-emotion="😡">😡</span>
+            <span data-emotion="😨">😨</span>
+            <span data-emotion="🤩">🤩</span>
+            <span data-emotion="😴">😴</span>
+        </div>
+        <textarea id="diaryContent" placeholder="记录此时此刻"></textarea>
+        <button class="save-btn" onclick="saveDiary()">✨ 收进书里</button>
+        <button class="backup-btn" onclick="exportDiaries()">📥 导出备份</button>
+        <button class="backup-btn" style="margin-top:5px;" onclick="importDiariesPrompt()">📤 导入备份</button>
+    </div>
+
+    <!-- 看书面板 -->
+    <div id="readPanel" class="panel">
+        <div class="book-cover">
+            <h2>📘 我的书</h2>
+            <p id="bookStats">翻开记录的书页</p>
+        </div>
+        <div class="book-area">
+            <!-- 翻页按钮放在书上方，不会遮挡书页角落 -->
+            <div class="flip-controls">
+                <button class="turn-btn" id="prevBtn" onclick="prevPage()" disabled>◀ 上一页</button>
+                <span style="color:#8b7b9e; font-size:14px;" id="pageIndicator"></span>
+                <button class="turn-btn" id="nextBtn" onclick="nextPage()" disabled>下一页 ▶</button>
+            </div>
+            <div id="flipbook">
+                <div class="empty-book">还没有记录，去写第一篇吧</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="feedback-toast" id="feedbackToast"></div>
+</div>
+
+<script>
+    // ===================== 数据管理 =====================
+    function getDiaries() {
+        const data = localStorage.getItem('emotion_diaries');
+        return data ? JSON.parse(data) : [];
+    }
+    function saveDiaries(diaries) {
+        localStorage.setItem('emotion_diaries', JSON.stringify(diaries));
+    }
+
+    // ===================== 情绪分析与鼓励 =====================
+    function generateFeedback(emotion, text) {
+        const positiveWords = ['开心','快乐','高兴','棒','好','爱','温暖','阳光','谢谢','感恩','幸福','笑'];
+        const negativeWords = ['难过','伤心','累','烦','压力','哭','焦虑','怕','讨厌','痛','糟糕'];
+        let posCount=0, negCount=0;
+        positiveWords.forEach(w => { if(text.includes(w)) posCount++; });
+        negativeWords.forEach(w => { if(text.includes(w)) negCount++; });
+        const happySet = ['😊','🤩'];
+        const sadSet = ['😢','😨'];
+        if(happySet.includes(emotion)){
+            if(posCount>0) return '感受到你的快乐了，今天真的在发光呢 ✨';
+            if(negCount>0) return '即使有不开心，你还是选择了微笑面对，真了不起。';
+            return '开心的一天值得被记住，明天也会是好天气。';
+        }else if(sadSet.includes(emotion)){
+            if(negCount>0) return '这些感受是真实的，抱抱你。你已经很努力了。';
+            return '情绪偶尔低落也没关系，给自己一点时间。';
+        }else if(emotion==='😡'){
+            return '生气说明你在乎，深呼吸，别让情绪住太久。';
+        }else if(emotion==='😴'){
+            return '非常精彩的故事 。';
+        }
+        return '谢谢你记录下这一刻，它很重要。';
+    }
+
+    function showFeedback(msg) {
+        const toast = document.getElementById('feedbackToast');
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // ===================== 情绪选择 =====================
+    document.getElementById('emotionRow').addEventListener('click', function(e){
+        if(e.target.tagName==='SPAN'){
+            this.querySelectorAll('span').forEach(s=>s.classList.remove('selected'));
+            e.target.classList.add('selected');
+        }
+    });
+
+    // ===================== 保存日记 =====================
+    function saveDiary(){
+        const selected = document.querySelector('#emotionRow span.selected');
+        const content = document.getElementById('diaryContent').value.trim();
+        if(!selected) return alert('请先点一个表情代表此时的感受');
+        if(!content) return alert('写点什么吧，哪怕一句话也好。');
+        const diary = {
+            date: new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric'}),
+            emotion: selected.getAttribute('data-emotion'),
+            content: content
+        };
+        const diaries = getDiaries();
+        diaries.unshift(diary);
+        saveDiaries(diaries);
+        showFeedback(generateFeedback(diary.emotion, diary.content));
+        document.getElementById('diaryContent').value = '';
+        document.querySelectorAll('#emotionRow span').forEach(s=>s.classList.remove('selected'));
+        if(document.getElementById('readPanel').classList.contains('active')){
+            renderBook();
+        }
+    }
+
+    // ===================== 删除日记 =====================
+    function deleteDiary(index){
+        if(!confirm('确定要撕掉这一页吗？')) return;
+        const diaries = getDiaries();
+        if(index>=0 && index<diaries.length){
+            diaries.splice(index,1);
+            saveDiaries(diaries);
+            renderBook();
+            showFeedback('那页已经被抹除了');
+        }
+    }
+
+    // ===================== 面板切换 =====================
+    function switchTab(tab){
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+        if(tab==='write'){
+            document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+            document.getElementById('writePanel').classList.add('active');
+        }else{
+            document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+            document.getElementById('readPanel').classList.add('active');
+            renderBook();
+        }
+    }
+
+    // ===================== 翻页控制（统一接口） =====================
+    let currentPageIndex = 0; // 用于回退模式
+    let useTurnJs = false;
+
+    function prevPage(){
+        if(useTurnJs){
+            $('#flipbook').turn('previous');
+        }else{
+            if(currentPageIndex>0){
+                currentPageIndex--;
+                updateCardView();
+            }
+        }
+    }
+    function nextPage(){
+        if(useTurnJs){
+            $('#flipbook').turn('next');
+        }else{
+            const diaries = getDiaries();
+            if(currentPageIndex < diaries.length-1){
+                currentPageIndex++;
+                updateCardView();
+            }
+        }
+    }
+
+    function updateCardView(){
+        const diaries = getDiaries();
+        const container = document.getElementById('flipbook');
+        const pages = container.querySelectorAll('.diary-page');
+        pages.forEach((page, idx) => {
+            page.style.transform = `translateX(${(idx - currentPageIndex) * 100}%)`;
+        });
+        document.getElementById('prevBtn').disabled = (currentPageIndex === 0);
+        document.getElementById('nextBtn').disabled = (currentPageIndex >= diaries.length-1);
+        document.getElementById('pageIndicator').textContent = `${currentPageIndex+1} / ${diaries.length}`;
+    }
+
+    // ===================== 渲染书（核心） =====================
+    function renderBook(){
+        const diaries = getDiaries();
+        const bookEl = document.getElementById('flipbook');
+        // 清理旧实例
+        if(bookEl.turn){
+            try { $('#flipbook').turn('destroy'); } catch(e){}
+        }
+        bookEl.innerHTML = '';
+        // 隐藏按钮和页码
+        document.getElementById('prevBtn').style.display = 'none';
+        document.getElementById('nextBtn').style.display = 'none';
+        document.getElementById('pageIndicator').textContent = '';
+
+        if(diaries.length === 0){
+            bookEl.innerHTML = '<div class="empty-book">还没有记录，去写第一篇吧</div>';
+            document.getElementById('bookStats').innerText = '空空的日记书';
+            return;
+        }
+
+        // 更新书封统计
+        const recent = diaries.slice(0,7).map(d=>d.emotion);
+        const happy = recent.filter(e=>['😊','🤩'].includes(e)).length;
+        const sad = recent.filter(e=>['😢','😨','😡'].includes(e)).length;
+        let stats = `已写下 ${diaries.length} 天`;
+        if(recent.length>0){
+            if(happy>sad) stats += '，最近心情像光一样 ';
+            else if(sad>happy) stats += '，一切总会过去的 ';
+            else stats += '，生活平平淡淡也好';
+        }
+        document.getElementById('bookStats').innerText = stats;
+
+        // 构建页面HTML
+        let pagesHtml = '';
+        diaries.forEach((d, idx) => {
+            pagesHtml += `<div class="diary-page">
+                <div class="emotion-big">${d.emotion}</div>
+                <div class="date-text">${d.date}</div>
+                <div class="content-text">${d.content}</div>
+                <button class="delete-btn" onclick="event.stopPropagation(); deleteDiary(${idx})">🗑️</button>
+            </div>`;
+        });
+        bookEl.innerHTML = pagesHtml;
+
+        // 显示翻页按钮
+        document.getElementById('prevBtn').style.display = 'inline-block';
+        document.getElementById('nextBtn').style.display = 'inline-block';
+
+        // 判断是否使用turn.js（多于1篇且turn加载成功）
+        if(diaries.length > 1 && typeof $.fn.turn === 'function'){
+            useTurnJs = true;
+            // 移除可能存在的card-view类
+            bookEl.classList.remove('card-view');
+            try {
+                $('#flipbook').turn({
+                    width: '100%',
+                    height: 380,
+                    autoCenter: true,
+                    display: 'double',
+                    acceleration: true,
+                    gradients: true,
+                    elevation: 50,
+                    pages: diaries.length,
+                    when: {
+                        turned: function(e, page){
+                            updateTurnButtons();
+                        }
+                    }
+                });
+                updateTurnButtons();
+            } catch(e){
+                // turn初始化失败，降级为卡片滑动
+                useTurnJs = false;
+                fallbackToCardView(diaries);
+            }
+        } else {
+            // 只有一篇或turn不可用，使用卡片滑动回退
+            useTurnJs = false;
+            fallbackToCardView(diaries);
+        }
+    }
+
+    function updateTurnButtons(){
+        const total = $('#flipbook').turn('pages');
+        const current = $('#flipbook').turn('page');
+        document.getElementById('prevBtn').disabled = (current <= 1);
+        document.getElementById('nextBtn').disabled = (current >= total);
+        document.getElementById('pageIndicator').textContent = `${current} / ${total}`;
+    }
+
+    function fallbackToCardView(diaries){
+        const bookEl = document.getElementById('flipbook');
+        bookEl.classList.add('card-view');
+        currentPageIndex = 0;
+        // 设置所有页面的初始位置
+        const pages = bookEl.querySelectorAll('.diary-page');
+        pages.forEach((page, idx) => {
+            page.style.transform = `translateX(${idx * 100}%)`;
+        });
+        updateCardView();
+    }
+
+    // ===================== 备份功能 =====================
+    function exportDiaries(){
+        const data = localStorage.getItem('emotion_diaries');
+        if(!data) return alert('没有日记可导出');
+        const blob = new Blob([data], {type:'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = '情绪日记备份_' + new Date().toISOString().slice(0,10) + '.json';
+        a.click();
+    }
+    function importDiariesPrompt(){
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = e => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = () => {
+                try{
+                    const diaries = JSON.parse(reader.result);
+                    localStorage.setItem('emotion_diaries', JSON.stringify(diaries));
+                    alert('导入成功！请切换到“我的书”查看。');
+                }catch(e){ alert('文件格式不对'); }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+
+    // 初始化
+    window.addEventListener('load', ()=>{
+        const first = document.querySelector('#emotionRow span');
+        if(first) first.classList.add('selected');
+        // 若turn.js未加载，提前设置标识
+        if(typeof $.fn.turn !== 'function'){
+            useTurnJs = false;
+        }
+    });
+</script>
+</body>
+</html>
